@@ -3,13 +3,27 @@ import SearchBar from './components/SearchBar';
 import StatusFilter from './components/StatusFilter';
 import TaskTable from './components/TaskTable';
 import { useTasks } from './hooks/useTasks';
+import { useDebouncedValue } from './hooks/useDebouncedValue';
 
 export default function App() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
 
-  const { tasks, total, loading, error } = useTasks(query, status, page, 10);
+  // Debounce typing so we don't fire one request per keystroke
+  const debouncedQuery = useDebouncedValue(query, 300);
+
+  const { tasks, total, loading, error } = useTasks(debouncedQuery, status, page, 10);
+
+  // Any filter change must go back to page 1, otherwise we can land past the last page
+  const handleQueryChange = (value) => {
+    setQuery(value);
+    setPage(1);
+  };
+  const handleStatusChange = (value) => {
+    setStatus(value);
+    setPage(1);
+  };
 
   const totalPages = Math.ceil(total / 10);
 
@@ -21,8 +35,8 @@ export default function App() {
       </header>
 
       <div className="controls">
-        <SearchBar value={query} onChange={setQuery} />
-        <StatusFilter value={status} onChange={setStatus} />
+        <SearchBar value={query} onChange={handleQueryChange} />
+        <StatusFilter value={status} onChange={handleStatusChange} />
       </div>
 
       <TaskTable tasks={tasks} loading={loading} error={error} />

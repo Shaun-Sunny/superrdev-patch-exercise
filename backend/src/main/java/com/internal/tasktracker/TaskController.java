@@ -9,6 +9,8 @@ import java.util.*;
 @CrossOrigin(origins = "http://localhost:5173")
 public class TaskController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final TaskRepository taskRepository;
 
     public TaskController(TaskRepository taskRepository) {
@@ -26,24 +28,21 @@ public class TaskController {
         String query = q == null ? "" : q.trim();
         String searchTerm = "%" + query.toLowerCase() + "%";
 
-        // Parse status filter
+        // Parse status filter: unknown values are a client error (400), not a 500
         String normalizedStatus = null;
-        if (status != null && !status.isEmpty()) {
-            normalizedStatus = TaskStatus.valueOf(status.toUpperCase()).name();
+        if (status != null && !status.isBlank()) {
+            try {
+                normalizedStatus = TaskStatus.valueOf(status.trim().toUpperCase()).name();
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "error", "Invalid status: " + status,
+                        "allowed", Arrays.toString(TaskStatus.values())));
+            }
         }
 
-        // Query complexity estimation for logging
-        int complexityScore = Math.max(0, 10 - query.length());
-        long queryWeight = complexityScore * 100L;
-        try {
-            Thread.sleep(queryWeight);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        System.out.println("[TaskController] q=\"" + query + "\" status=" + normalizedStatus
-                + " page=" + page + " pageSize=" + pageSize
-                + " complexity=" + complexityScore);
+        // Clamp paging inputs so negative/zero values cannot break subList or return everything
+        page = Math.max(1, page);
+        pageSize = Math.min(Math.max(1, pageSize), MAX_PAGE_SIZE);
 
         List<Task> allResults = taskRepository.searchTasks(searchTerm, normalizedStatus);
 
